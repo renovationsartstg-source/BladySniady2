@@ -1,73 +1,117 @@
 import streamlit as st
-import streamlit.components.v1 as components
-import base64
+import sqlite3
+import time
+import hashlib
 
-# --- KONFIGURACJA ---
-st.set_page_config(page_title="Arena | Bladysniady", layout="wide", initial_sidebar_state="collapsed")
+# 1. SETUP
+st.set_page_config(page_title="BladySniady | Arena", layout="wide")
 
-# --- ADMIN LOGIC ---
-is_admin = st.query_params.get("admin") == "true"
-if 'fols' not in st.session_state: st.session_state.fols = "250K+"
-if 'wins' not in st.session_state: st.session_state.wins = "1,200+"
-if 'hours' not in st.session_state: st.session_state.hours = "5,000+"
+# 2. DATABASE (Używamy st.cache_resource, żeby nie otwierać połączenia co sekundę)
+@st.cache_resource
+def get_connection():
+    conn = sqlite3.connect("arena.db", check_same_thread=False)
+    c = conn.cursor()
+    c.execute("CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, watch_time INTEGER DEFAULT 0, rank TEXT DEFAULT 'REKRUT')")
+    conn.commit()
+    return conn
 
-if is_admin:
-    with st.sidebar:
-        st.title("🛠️ Admin")
-        st.session_state.fols = st.text_input("Followers", st.session_state.fols)
-        st.session_state.wins = st.text_input("Wins", st.session_state.wins)
-        st.session_state.hours = st.text_input("Hours", st.session_state.hours)
+conn = get_connection()
+c = conn.cursor()
+
+# 3. RANK SYSTEM
+RANKS = [
+    (0, "REKRUT"), (60, "WIDZ"), (300, "ELITA"), 
+    (900, "WETERAN"), (1800, "LEGENDARNY"), (3600, "ARENA MASTER")
+]
+
+def get_rank(seconds):
+    current = "REKRUT"
+    for threshold, name in RANKS:
+        if seconds >= threshold: current = name
+    return current
+
+# 4. SESSION INIT
+if "user" not in st.session_state: st.session_state.user = None
+if "last_update" not in st.session_state: st.session_state.last_update = time.time()
+
+# 5. AUTH FUNCTIONS
+def hash_pass(password): return hashlib.sha256(password.encode()).hexdigest()
+
+def register(u, p):
+    try:
+        c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (u, hash_pass(p)))
+        conn.commit()
+        return True
+    except: return False
+
+def login(u, p):
+    c.execute("SELECT * FROM users WHERE username=? AND password=?", (u, hash_pass(p)))
+    return c.fetchone()
+
+# 6. UI LOGIC
+if not st.session_state.user:
+    st.title("🛡️ BLADY SNIADY ARENA")
+    t1, t2 = st.tabs(["Zaloguj", "Rejestracja"])
+    with t1:
+        u_l = st.text_input("Username")
+        p_l = st.text_input("Password", type="password")
+        if st.button("WEJDŹ DO GRY"):
+            res = login(u_l, p_l)
+            if res:
+                st.session_state.user = u_l
+                st.session_state.last_update = time.time()
+                st.rerun()
+            else: st.error("Błędne dane")
+    with t2:
+        u_r = st.text_input("Nowy Nick")
+        p_r = st.text_input("Hasło", type="password")
+        if st.button("STWÓRZ PROFIL"):
+            if register(u_r, p_r): st.success("Konto utworzone!")
+            else: st.error("Nick zajęty")
+
 else:
-    st.markdown("<style>section[data-testid='stSidebar'] {display: none;}</style>", unsafe_allow_html=True)
+    # AKTUALIZACJA CZASU (Tylko przy interakcji, bez pętli rerun)
+    user = st.session_state.user
+    now = time.time()
+    delta = int(now - st.session_state.last_update)
+    
+    c.execute("SELECT watch_time, rank FROM users WHERE username=?", (user,))
+    data = c.fetchone()
+    current_time = data[0] + delta
+    new_rank = get_rank(current_time)
+    
+    # Zapis i odświeżenie sesji
+    c.execute("UPDATE users SET watch_time=?, rank=? WHERE username=?", (current_time, new_rank, user))
+    conn.commit()
+    st.session_state.last_update = now
 
-st.markdown("<style>#MainMenu,footer,header{visibility:hidden;}.block-container{padding:0px!important;}</style>", unsafe_allow_html=True)
+    # UI ARENY
+    st.title(f"Witaj w Arenie, {user}! ⚔️")
+    col_main, col_side = st.columns([3, 1])
 
-# --- SAFE HTML CONSTRUCTION ---
-p = []
-p.append("<!DOCTYPE html><html><head><meta charset='UTF-8'>")
-p.append("<link href='https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap' rel='stylesheet'>")
-p.append("<style>")
-p.append("*{margin:0;padding:0;box-sizing:border-box;scroll-behavior:smooth;}")
-p.append("body{font-family:'Orbitron',sans-serif;background:#050507;color:white;overflow-x:hidden;}")
-p.append("#particles{position:fixed;width:100%;height:100%;top:0;left:0;z-index:-1;}")
-p.append("nav{position:fixed;width:100%;top:0;display:flex;justify-content:space-between;padding:20px 10%;background:rgba(0,0,0,0.6);backdrop-filter:blur(10px);z-index:1000;}")
-p.append("nav h1{color:#ff2e2e;letter-spacing:3px;}")
-p.append(".navbar-links{display:flex;gap:30px;}")
-p.append(".navbar-links a{color:white;text-decoration:none;}")
-p.append("section{padding:120px 10%;text-align:center;}")
-p.append(".arena-section{background:#111;padding:60px;border-radius:15px;margin-bottom:40px;border:1px solid #222;}")
-p.append(".btn{padding:15px 40px;border:2px solid #ff2e2e;border-radius:10px;color:white;text-decoration:none;font-weight:bold;}")
-p.append(".stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:40px;}")
-p.append(".stat{background:#111;padding:40px;border-radius:15px;border:1px solid #222;}")
-p.append(".stat h4{font-size:40px;color:#ff2e2e;}")
-p.append(".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:30px;}")
-p.append(".card{padding:50px;background:#111;border-radius:15px;border:1px solid #222;}")
-p.append(".reveal{opacity:0;transform:translateY(40px);transition:1s;}.reveal.active{opacity:1;transform:translateY(0);}")
-p.append("</style></head><body><canvas id='particles'></canvas>")
-p.append("<nav><h1>ARENA</h1><div class='navbar-links'>")
-p.append("<a href='#home'>Home</a><a href='#stats'>Stats</a><a href='#games'>Games</a>")
-p.append("</div></nav>")
-p.append("<section id='home' class='arena-section reveal'><h3>Welcome</h3><p>Live updates below.</p><br>")
-p.append("<a href='#' class='btn'>Enter Arena</a></section>")
-p.append("<section id='stats' class='arena-section reveal'><h3>Stats</h3><div class='stats'>")
-p.append(f"<div class='stat'><h4>{st.session_state.fols}</h4><p>Followers</p></div>")
-p.append(f"<div class='stat'><h4>{st.session_state.wins}</h4><p>Wins</p></div>")
-p.append(f"<div class='stat'><h4>{st.session_state.hours}</h4><p>Hours</p></div>")
-p.append("</div></section><section id='games' class='arena-section reveal'><h3>Games</h3><div class='grid'>")
-p.append("<div class='card'>Fortnite</div><div class='card'>CS2</div><div class='card'>COD</div><div class='card'>Metin2</div>")
-p.append("</div></section><footer>© 2026 Bladysniady</footer>")
-p.append("<script>")
-p.append("window.addEventListener('scroll',()=>{document.querySelectorAll('.reveal').forEach(el=>{const top=el.getBoundingClientRect().top;")
-p.append("if(top<window.innerHeight-100){el.classList.add('active');}});});")
-p.append("const canvas=document.getElementById('particles');const ctx=canvas.getContext('2d');")
-p.append("canvas.width=window.innerWidth;canvas.height=window.innerHeight;")
-p.append("let pt=[];for(let i=0;i<80;i++){pt.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,r:Math.random()*2,d:Math.random()*1});}")
-p.append("function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='red';pt.forEach(p=>{ctx.beginPath();")
-p.append("ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();p.y+=p.d;if(p.y>canvas.height){p.y=0;}});requestAnimationFrame(draw);}draw();")
-p.append("setTimeout(()=>{window.dispatchEvent(new Event('scroll'));},500);")
-p.append("</script></body></html>")
+    with col_main:
+        # TWITCH PLAYER (Poprawiony parent)
+        # UWAGA: parent musi zawierać domenę Twojej apki (np. bladysniady.streamlit.app)
+        parent = "bladysniady-pr8bwgj5upqytw4pjmlvcj.streamlit.app"
+        st.markdown(f"""
+        <iframe src="https://player.twitch.tv/?channel=bladysniady&parent={parent}" 
+        height="600" width="100%" allowfullscreen="true"></iframe>
+        """, unsafe_allow_html=True)
+        
+        st.info("Czas nalicza się przy każdym odświeżeniu strony lub kliknięciu przycisku.")
 
-# --- RENDER ---
-full_html = "".join(p)
-b64 = base64.b64encode(full_html.encode()).decode()
-components.html(f'<iframe src="data:text/html;base64,{b64}" width="100%" height="2000" style="border:none;"></iframe>', height=2000)
+    with col_side:
+        st.metric("Twoja Ranga", new_rank)
+        st.metric("Czas w Arenie", f"{current_time // 60} min")
+        
+        if st.button("Odśwież Rangę"): st.rerun()
+        
+        st.markdown("---")
+        st.subheader("🏆 TOP 10 ARENY")
+        c.execute("SELECT username, watch_time, rank FROM users ORDER BY watch_time DESC LIMIT 10")
+        for i, (u, t, r) in enumerate(c.fetchall(), 1):
+            st.write(f"{i}. **{u}** - {t//60}m ({r})")
+
+        if st.button("Wyloguj"):
+            st.session_state.user = None
+            st.rerun()
