@@ -10,11 +10,10 @@ st.set_page_config(
 )
 
 # --- LOGIKA UKRYTEGO PANELU ADMINA ---
-# Dostęp przez dopisanie ?admin=true do adresu URL
 query_params = st.query_params
 is_admin = query_params.get("admin") == "true"
 
-# Domyślne wartości (możesz je zmieniać w panelu admina)
+# Inicjalizacja statystyk w pamięci sesji
 if 'fols' not in st.session_state: st.session_state.fols = "250K+"
 if 'wins' not in st.session_state: st.session_state.wins = "1,200+"
 if 'hours' not in st.session_state: st.session_state.hours = "5,000+"
@@ -26,36 +25,29 @@ if is_admin:
         st.session_state.wins = st.text_input("Wins", st.session_state.wins)
         st.session_state.hours = st.text_input("Hours", st.session_state.hours)
         st.info("Zmienione wartości pojawią się na stronie głównej.")
+else:
+    st.markdown("<style>section[data-testid='stSidebar'] {display: none;}</style>", unsafe_allow_html=True)
 
 # --- UKRYWANIE ELEMENTÓW STREAMLIT ---
-st.markdown("""
-    <style>
-    #MainMenu, footer, header {visibility: hidden;}
-    .block-container {padding: 0px !important;}
-    iframe {border: none;}
-    </style>
-    """, unsafe_allow_html=True)
+st.markdown("<style>#MainMenu, footer, header {visibility: hidden;} .block-container {padding: 0px !important;} iframe {border: none;}</style>", unsafe_allow_html=True)
 
-# --- TWÓJ KOD HTML (Zoptymalizowany pod Streamlit) ---
-raw_html = f"""
+# --- SZABLON HTML (Zwykły string bez 'f' na początku - chroni przed SyntaxError) ---
+html_template = """
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-    <meta charset="UTF-8">
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
-    <style>
-        *{{margin:0;padding:0;box-sizing:border-box;scroll-behavior:smooth;}}
-        body{{font-family:'Orbitron',sans-serif;background:#050507;color:white;overflow-x:hidden;}}
-        #particles{{position:fixed;width:100%;height:100%;top:0;left:0;z-index:-1;background:#050507;}}
-        nav{{position:fixed;width:100%;top:0;display:flex;justify-content:space-between;align-items:center;padding:20px 10%;background:rgba(0,0,0,0.6);backdrop-filter:blur(10px);z-index:1000;}}
-        nav h1{{color:#ff2e2e;letter-spacing:3px;}}
-        .navbar-links{{display:flex;gap:30px;}}
-        .navbar-links a{{color:white;text-decoration:none;transition:0.3s;}}
-        .navbar-links a:hover{{color:#ff2e2e;}}
-        section{{padding:120px 10%;text-align:center;}}
-        h3{{font-size:34px;margin-bottom:40px;color:#ff2e2e;}}
-        .arena-section{{background:#111;padding:60px;border-radius:15px;margin-bottom:40px;border:1px solid #222;transition:0.3s;}}
-        .arena-section:hover{{transform:scale(1.02);border-color:#ff2e2e;box-shadow:0 0 30px red;}}
-        .btn{{padding:15px 40px;border:2px solid #ff2e2e;border-radius:10px;color:white;text-decoration:none;transition:0.3s;font-weight:bold;}}
-        .btn:hover{{background:#ff2e2e;box-shadow:0 0 30px red;transform:translateY(-5px);}}
-        .stats{{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:40px;}}
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;scroll-behavior:smooth;}
+body{font-family:'Orbitron',sans-serif;background:#050507;color:white;overflow-x:hidden;}
+#particles{position:fixed;width:100%;height:100%;top:0;left:0;z-index:-1;background:#050507;}
+nav{position:fixed;width:100%;top:0;display:flex;justify-content:space-between;align-items:center;padding:20px 10%;background:rgba(0,0,0,0.6);backdrop-filter:blur(10px);z-index:1000;}
+nav h1{color:#ff2e2e;letter-spacing:3px;}
+.navbar-links{display:flex;gap:30px;}
+.navbar-links a{color:white;text-decoration:none;transition:0.3s;}
+.navbar-links a:hover{color:#ff2e2e;}
+section{padding:120px 10%;text-align:center;}
+h3{font-size:34px;margin-bottom:40px;color:#ff2e2e;}
+.arena-section{background:#111;padding:60px;border-radius:15px;margin-bottom:40px;border:1px solid #222;transition:0.3s;}
+.arena-section:hover{transform:scale(1.02);border-
